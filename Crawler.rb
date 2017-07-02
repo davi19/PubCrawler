@@ -1,9 +1,8 @@
-require "nokogiri"
-require 'watir'
+require 'nokogiri'
+require 'open-uri'
+require 'net_http_ssl_fix'
 
-navegador = Watir::Browser.start "https://www.ncbi.nlm.nih.gov/pubmed/?term=diabetes"
-site = open("https://www.ncbi.nlm.nih.gov/pubmed/?term=diabetes")
-documento =Nokogiri::HTML(site)
+documento = Nokogiri::HTML(open('https://www.ncbi.nlm.nih.gov/pubmed/?term=diabetes'))
 
 pagina=0
 while(pagina!=20)
