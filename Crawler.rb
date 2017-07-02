@@ -1,0 +1,1 @@
+navegador = Watir::Browser.start ""
