@@ -1,25 +1,39 @@
-require 'net/https'
 require 'nokogiri'
+require 'open-uri'
+require 'watir'
+require 'webdrivers'
 
-url = "https://www.ncbi.nlm.nih.gov/pubmed/?term=diabetes"
-url = URI.parse( url )
-http = Net::HTTP.new( url.host, url.port )
-http.use_ssl = true if url.port == 443
-http.verify_mode = OpenSSL::SSL::VERIFY_NONE if url.port == 443
-path = url.path
-path += "?" + url.query unless url.query.nil?
-res, data = http.get( path )
 
-case res
-  when Net::HTTPSuccess, Net::HTTPRedirection
-    # parse link
-    documento = Nokogiri::HTML(data)
+#Setando iniciando variaveis principais
+
+Selenium::WebDriver::Chrome.driver_path='/home/davi/Downloads/chromedriver'
+navegador = Watir::Browser.start 'https://www.ncbi.nlm.nih.gov/pubmed/?term=diabetes'
+documento = Nokogiri::HTML(open("https://www.ncbi.nlm.nih.gov/pubmed/?term=diabetes"))
+
+
+
+#Recupera total de pagina
+paginas = documento.css(".page")
+
+totalPaginas=0
+paginas[0..-1].each do |row|
+  quantidade= row.text.split('of')
+  totalPaginas =quantidade[1]
+  puts totalPaginas
+  break
+end
+
+
+#paginacao = navegador.text_field id: 'pageno'
+#paginacao.set totalPaginas.to_i
+#navegador.send_keys :enter
+
+#Inicio do loop central
     pagina=0
-    while(pagina!=20)
+    while(pagina!=totalPaginas)
       pmid=documento.css(".rprtid/dd")
       pmid[0..-1].each do |row|
-        paginaArtigo=open("https://www.ncbi.nlm.nih.gov/pubmed/#{row.text}")
-        documentoArtigo= Nokogiri::HTMl(paginaArtigo)
+        documentoArtigo= Nokogiri::HTML(open("https://www.ncbi.nlm.nih.gov/pubmed/#{row.text}"))
         autores =documentoArtigo.css(".auths")
         filiacao =documentoArtigo.css(".afflist")
         resumo =documentoArtigo.css(".abstr")
@@ -27,17 +41,12 @@ case res
         if(resumo.empty?|| autores.empty?)
           puts "Vazio"
         else
-          artigo = autores.text+"\n"+filiacao+"\n"+resumo+"\n"+palavrasChave
+          artigo =" #{autores.text} \n #{filiacao.text} \n #{resumo.text} \n #{palavrasChave.text}"
           puts artigo
         end
       end
+      link = navegador.link :text => 'Next >'
+      link.click
+      documento = Nokogiri::HTML.parse(navegador.html)
       pagina=pagina+1
     end
-  else
-    puts "failed" + res.to_s
-
-end
-
-
-
-
