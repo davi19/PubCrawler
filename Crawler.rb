@@ -3,7 +3,11 @@ require 'open-uri'
 require 'watir'
 require 'webdrivers'
 require 'redis'
+require 'fuzzystringmatch'
 
+
+
+jarow = FuzzyStringMatch::JaroWinkler.create( :native )
 redis = Redis.new
 redisinstituicao = Redis.new
 #Setando iniciando variaveis principais
@@ -31,73 +35,72 @@ end
 rescue SocketError
   puts "Sem Conexão"
 end
-#navegador.close
-#navegador = Watir::Browser.start 'https://www.ncbi.nlm.nih.gov/pubmed/?term=diabetes'
-#paginacao = navegador.text_field id: 'pageno'
-#paginacao.set 466
-#navegador.send_keys :enter
-#documento = Nokogiri::HTML.parse(navegador.html)
+paginacao = navegador.text_field id: 'pageno'
+paginacao.set 2849
+navegador.send_keys :enter
+documento = Nokogiri::HTML.parse(navegador.html)
+
 #Inicio do loop central
-    pagina=1
+    pagina=2849
     while(pagina!=totalPaginas)
       pmid=documento.css(".rprtid/dd")
       pmid[0..-1].each do |row|
         begin
           documentoArtigo= Nokogiri::HTML(open("https://www.ncbi.nlm.nih.gov/pubmed/#{row.text}"))
           autores =documentoArtigo.css(".auths")
-          filiacao =documentoArtigo.css(".afflist")
+          filiacao =documentoArtigo.css(".ui-ncbi-toggler-slave/dd")
           resumo =documentoArtigo.css(".abstr")
           palavrasChave =documentoArtigo.css(".keywords")
+          controle=false
+
           if(resumo.empty?|| autores.empty?||filiacao.empty?)
             puts "Vazio"
           else
             artigo =" #{autores.text} | #{filiacao.text} |  #{resumo.text} | #{palavrasChave.text}"
 
-            existe = redis.exists(row.text)
-
-            if !existe
-              redis.set(row.text,artigo)
-              puts row.text
+              existe = redis.exists(row.text)
+            if existe
+                p "Já cadastrado"
             else
-              puts 'Artigo já cadastrado'
-            end
-        #Arvore de decisão
-          filiacoes = filiacao.text.split(/[,;]/)
-          filiacoes[0..-1].each do |fili|
-            if fili.include? 'Author information1'
-            fili = fili.tr('Author information1','')
-            end
-            if fili.include? 'Electronic address'
-              semEmail = fili.split('.')
-              existeinstituicao = redisinstituicao.exists(semEmail[0])
-              if !existeinstituicao
-                redisinstituicao.set(semEmail[0],row.text)
-                puts semEmail[0]
-              else
-                puts "Instituição já cadastrada"
-                anterior= redisinstituicao.get(fili)
-                anterior= "#{anterior};#{row.text}"
-                redisinstituicao.set(semEmail[0],anterior)
+                puts row.text
+              redis.setnx(row.text,artigo)
+              todas = redisinstituicao.keys('*')
+              filiacao[0..-1].each do |row2|
+                fili= row2.text.split(",")
+                for count in fili
+                  for instituicao2 in todas
+                    if jarow.getDistance( count,instituicao2 ) > 0.9
+                      artigosinsti = redisinstituicao.get(instituicao2)
+                      novoValor= "#{artigosinsti} ; #{row.text}"
+                      redisinstituicao.set(instituicao2,novoValor)
+                      controle=true
+                    end
+                  end
+                  if !controle
+                    redisinstituicao.set(count,row.text)
+                  end
+                end
               end
-            else
-            existeinstituicao = redisinstituicao.exists(fili)
-            if !existeinstituicao
-              redisinstituicao.set(fili,row.text)
-              puts fili
-            else
-              anterior= redisinstituicao.get(fili)
-              anterior= "#{anterior};#{row.text}"
-              redisinstituicao.set(fili,anterior)
-              puts "Instituição já cadastrada"
             end
-          end
-          end
+
+
+
+
+
+
+
+
+
+
+
         end
       #Tratando negação do servidor
         rescue
           puts "TimeOUT"
         #Voltando a pagina correta
           puts "SALVO"
+          out = File.new("output.txt", "w")
+          out.puts "#{pagina}"
           navegador.close
           navegador = Watir::Browser.start 'https://www.ncbi.nlm.nih.gov/pubmed/?term=diabetes'
           paginacao = navegador.text_field id: 'pageno'
