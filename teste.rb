@@ -1,0 +1,3 @@
+require 'pubcraler'
+
+pubcraler.Crawler
